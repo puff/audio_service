@@ -30,3 +30,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  assets:
+    - images/ScienceFriday_WNYCStudios_1400.jpg

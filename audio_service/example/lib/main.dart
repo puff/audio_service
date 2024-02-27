@@ -18,12 +18,17 @@
 // flutter run
 
 import 'dart:async';
+import 'dart:io';
+import 'dart:math';
 
 import 'package:audio_service/audio_service.dart';
+import 'package:audio_service_example/MediaItemContentProvider.dart';
 import 'package:audio_service_example/common.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:rxdart/rxdart.dart';
 
 // You might want to provide this using dependency injection rather than a
@@ -31,6 +36,21 @@ import 'package:rxdart/rxdart.dart';
 late AudioHandler _audioHandler;
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final documentsDirectory = await getApplicationDocumentsDirectory();
+  final albumImageFile = File('${documentsDirectory.absolute.path}/ScienceFriday_WNYCStudios_1400.jpg');
+  if (!(await albumImageFile.exists())) {
+    final albumImageBytes = await rootBundle.load("images/ScienceFriday_WNYCStudios_1400.jpg");
+    final albumBuffer = albumImageBytes.buffer;
+    await albumImageFile.create(recursive: true);
+    await albumImageFile.writeAsBytes(
+      albumBuffer.asUint8List(
+        albumImageBytes.offsetInBytes,
+        albumImageBytes.lengthInBytes,
+      ),
+    );
+  }
+
   _audioHandler = await AudioService.init(
     builder: () => AudioPlayerHandler(),
     config: const AudioServiceConfig(
@@ -86,13 +106,14 @@ class MainScreen extends StatelessWidget {
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    _button(Icons.fast_rewind, _audioHandler.rewind),
+                    // _button(Icons.fast_rewind, _audioHandler.rewind),
                     if (playing)
                       _button(Icons.pause, _audioHandler.pause)
                     else
                       _button(Icons.play_arrow, _audioHandler.play),
-                    _button(Icons.stop, _audioHandler.stop),
-                    _button(Icons.fast_forward, _audioHandler.fastForward),
+                    // _button(Icons.stop, _audioHandler.stop),
+                    // _button(Icons.fast_forward, _audioHandler.fastForward),
+                    _button(Icons.skip_next, _audioHandler.skipToNext)
                   ],
                 );
               },
@@ -155,13 +176,25 @@ class MediaState {
 /// An [AudioHandler] for playing a single item.
 class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   static final _item = MediaItem(
-    id: 'https://s3.amazonaws.com/scifri-episodes/scifri20181123-episode.mp3',
-    album: "Science Friday",
-    title: "A Salute To Head-Scratching Science",
-    artist: "Science Friday and WNYC Studios",
-    duration: const Duration(milliseconds: 5739820),
-    artUri: Uri.parse(
-        'https://media.wnyc.org/i/1400/1400/l/80/1/ScienceFriday_WNYCStudios_1400.jpg'),
+      id: 'https://s3.amazonaws.com/scifri-episodes/scifri20181123-episode.mp3',
+      album: "Science Friday",
+      title: "A Salute To Head-Scratching Science",
+      artist: "Science Friday and WNYC Studios",
+      duration: const Duration(milliseconds: 5739820),
+      // artUri: Uri.parse(
+      //     'https://media.wnyc.org/i/1400/1400/l/80/1/ScienceFriday_WNYCStudios_1400.jpg'),
+      artUri: Uri(scheme: "content", host: "com.ryanheise.audioserviceexample", path: "ScienceFriday_WNYCStudios_1400.jpg")
+  );
+
+  static final _item2 = MediaItem(
+      id: 'https://s3.amazonaws.com/scifri-episodes/scifri20240223-episode.mp3',
+      album: "Science Friday",
+      title: "February 23, 2024",
+      artist: "Science Friday and WNYC Studios",
+      duration: const Duration(milliseconds: 5698000),
+      // artUri: Uri.parse(
+      //     'https://media.wnyc.org/i/1400/1400/l/80/1/ScienceFriday_WNYCStudios_1400.jpg'),
+      artUri: Uri(scheme: "content", host: "com.ryanheise.audioserviceexample", path: "ScienceFriday_WNYCStudios_1400.jpg")
   );
 
   final _player = AudioPlayer();
@@ -196,6 +229,17 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> stop() => _player.stop();
 
+  @override
+  Future<void> skipToNext() async {
+    // alternate between media items
+    var item = mediaItem.valueOrNull?.title == _item.title ? _item2 : _item;
+
+    // add some randomness so the artwork doesn't get cached by audio_service
+    item = item.copyWith(artUri: item.artUri?.replace(fragment: Random().nextDouble().toString()));
+
+    mediaItem.add(item);
+  }
+
   /// Transform a just_audio event into an audio_service state.
   ///
   /// This method is used from the constructor. Every event received from the
@@ -204,10 +248,11 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   PlaybackState _transformEvent(PlaybackEvent event) {
     return PlaybackState(
       controls: [
-        MediaControl.rewind,
+        // MediaControl.rewind,
         if (_player.playing) MediaControl.pause else MediaControl.play,
         MediaControl.stop,
-        MediaControl.fastForward,
+        // MediaControl.fastForward,
+        MediaControl.skipToNext
       ],
       systemActions: const {
         MediaAction.seek,
@@ -229,4 +274,9 @@ class AudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       queueIndex: event.currentIndex,
     );
   }
+}
+
+@pragma('vm:entry-point')
+void mediaItemContentProviderEntrypoint() {
+  MediaItemContentProvider('com.ryanheise.audioserviceexample.MediaItemContentProvider');
 }

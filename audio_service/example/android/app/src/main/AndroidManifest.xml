@@ -57,6 +57,11 @@
             </intent-filter>
         </receiver>
 
+        <provider
+                android:name=".MediaItemContentProvider"
+                android:authorities="com.ryanheise.audioserviceexample"
+                android:exported="true" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
